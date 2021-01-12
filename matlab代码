@@ -1,0 +1,173 @@
+clear
+clc
+%A=xlsread('C:\Users\PIYUE\Desktop\bb\1418aa.xlsx');
+time=[ ];
+Temp=[ ];
+reactor=[];
+zerox=[];
+zeroy=[]*nan;
+a=1;
+b=1;
+c=1;
+d=1; 
+%surf(x,yy);
+%shading interp
+%cftool(x,yy)
+%热停堆至180℃的计算
+for i=1:600
+    time(i)=i/60
+    Temp(i)=290-time(i)*28
+    if abs(Temp(i)-180)<=(28/60)
+        a=i
+        break
+    end
+end
+%if abs(Temp()-180)<=(28/60)
+    %a=row(Temp)
+    %else time(i)
+%end
+%180℃台阶上的温度计算
+for j=a:a+240
+    Temp(j)=Temp(i)
+    time(j)=j/60
+end
+%180℃至拐点温度的计算，同时寻找拐点
+%j时刻是开始降温的时间，K时刻是不能满足的时间
+hetest=[];
+reactortest=[];
+timetest=[];
+for k=j:j+800
+    timetest(k)=k
+    time(k)=k/60
+    Temp(k)=Temp(k-1)-28/60
+    heatex(k)=0.5713*Temp(k)-21.84
+    hetest(k)=heatex(k);
+    
+    %堆芯功率+带热功率
+    reactor(k)=(42.45*(time(k).^-0.287)+23.55+7.591)*0.5;
+    reactortest(k)=reactor(k)
+    %寻找最小点
+    zerox(k)=heatex(k)-reactor(k)
+    if zerox(k)<=0   %等于0的情况
+        b=k
+        break
+    end
+%     if abs(time(k)-9.373)<=(1/60)
+%         b=k
+%         break
+%     end
+end
+%拐点温度至70℃的计算
+for q=b:b+2000
+    time(q)=q/60
+    heatex(q)=0.5713*Temp(q-1)-21.84
+    reactor(k)=(42.45*(time(q).^-0.287)+7.591)*0.5;
+    zeroy(q)=(heatex(q)-reactor(k))*1000*3600/(3028022)
+    Temp(q)=Temp(q-1)-zeroy(q)/60
+    if abs(Temp(q)-70)<=0.2
+        c=q
+        break
+    end
+end
+%70℃以下至60℃的计算
+for r=c:c+2000
+    time(r)=r/60
+    heatex(r)=0.5713*Temp(r-1)-21.84
+    reactor(r)=(42.45*(time(r).^-0.287))*0.5;
+    zeroy(r)=(heatex(r)-reactor(r))*1000*3600/(3028022)
+    Temp(r)=Temp(r-1)-zeroy(r)/60
+    if abs(Temp(r)-60)<=0.2
+        d=r
+        break
+    end
+end
+%此处开始推算换热器降温过程中换热器的换热量,j是开始点,k是结束点
+hx_actualburden=[];
+hx_entertemp=[];
+%hx_flowrate=[];
+for h=1:(k-j-1)
+    %hx_actualburden(h)=0.5*28*3028022/(1000*3600)+(42.45*(time(k).^-0.287)+7.591)*0.5
+    hx_actualburden(h) = reactor(j+h)
+    hx_entertemp(h) = Temp(j+h)
+end
+plot(time(),Temp(),'k','LineWidth',2)
+xlabel('停堆时间(h)')
+ylabel('反应堆冷却剂温度(℃)')
+set(gca,'YLim',[0 300])
+%set(gca,'XLim',[0 50])
+hold on
+%此部分是对绘制的图进行代码注释
+quiver(time(a-100),Temp(a-100),2,50,'k','filled','linewidth',1,'ShowArrowHead','off')
+text(time(a-100)+2,Temp(a-100)+50,'最大冷却速率（28℃/h）')
+
+quiver(time(a+100),Temp(a+100),2,50,'k','filled','linewidth',1,'ShowArrowHead','off')
+text(time(a+100)+2,Temp(a+100)+50, {'RHR投运温度调节的准备';
+          '及稳压器灭汽腔（4h）'})
+
+quiver(time(c),Temp(c),2,50,'k','filled','linewidth',1,'ShowArrowHead','off')
+text(time(c)+2,Temp(c)+50,'主泵停运') 
+set(0,'defaultfigurecolor','w')
+
+% 此部分作废，因为text只能在数据点就近注释，text(time(a+100),Temp(a+100),'RHR投运温度调节的准备及稳压器灭汽腔（4h）')
+% 此部分作废，因为text只能在数据点就近注释，text(time(a-100),Temp(a-100),'最大冷却速率（28℃/h）')
+% 此部分作废，因为text只能在数据点就近注释，text(time(c),Temp(c),'主泵停运') 
+%同时此处开始推算计算过程中进入换热器的流量
+%本部分使用了solve命令；其中换热器的换热量与流量、温度的关系公式，是由cftool拟合得到
+hx_flow=[];
+syms y;
+x=0;
+bbb=0;
+ccc=0;
+p00 = 0.1173 
+p10 = -0.00438  
+p01 = -0.03648 
+p20 = 0.000109 
+p11 = 0.001012 
+p02 = 1.869e-05 
+p30 = -3.311e-07 
+p21 = 4.076e-07 
+p12 = -5.256e-07 
+for j=1:(k-j-1)
+    x=hx_entertemp(j)
+    %ccc=hx_actualburden(j)
+    %syms hx_flowrate
+    eqn =hx_actualburden(j) == 0.1173 + p10*x + p01*y + p20*x^2 + p11*x*y + p02*y^2 + p30*x^3 + p21*x^2*y + p12*x*y^2;
+    hx_flow(j) = vpasolve(eqn,y,[50 1000])
+    %hx_flow(j)=bbb
+    %hx_flow(1)=hx_flowrate
+end
+%此处绘制换热器入口温度和流量的图
+%plot(hx_entertemp(),hx_flow(),'k','LineWidth',1)
+%xlabel('换热器入口温度(℃)')
+%ylabel('换热器入口流量(m3/h)')
+%cftool(hx_entertemp(),hx_flow())
+
+
+%此处是换热器公式拟合的part，需单独设立m文件进行
+% clear
+% clc
+% A=xlsread('C:\Users\Administrator\Desktop\RHRteethermal\1418hx.xlsx')
+% x=A(1,2:end)
+% yy=A(2:end,:)
+% y=yy(:,1)
+% z=yy(:,2:end)
+% surf(x,y,z)
+% cftool(x(),y(),z())
+%换热器入口温度(℃)
+%换热器入口流量(m3/h)
+%换热器热负荷(MW）
+
+%plot(time(475:681),heatex(475:681),'r','LineWidth',1)
+%hold on
+%plot(time(475:681),reactor(475:681),'k','LineWidth',1)
+%以下有用
+%plot( hx_entertemp(),hx_actualburden(),'k','LineWidth',2)
+%xlabel('换热器入口温度(℃)')
+%ylabel('换热器热负荷(MW）')
+%cftool( hx_entertemp(),hx_actualburden())
+%plot(timetest(solve),hetest(),'r','LineWidth',1)
+%hold on
+%plot(timetest(),reactortest(),'r','LineWidth',1)
+%hold on
+%plot(timetest(),zerox(),'k','LineWidth',2)
+%solve
